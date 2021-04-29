@@ -1,0 +1,194 @@
+version: "2"
+services:
+  calibre-web:
+    image: linuxserver/calibre-web:version-0.6.11
+    container_name: calibre-web
+    restart: always
+    environment:
+      - TZ=Europe/London # Specify a timezone to use EG Europe/London.
+      - PUID=1000 # ID of user to take ownership of application/files
+      - PGID=1000 # GID of user to take ownership of application/files
+    volumes:
+      - /filestore/config/calibre-web:/config # Where calibre-web stores the internal database and config.
+      - /filestore/books:/books # Where your calibre database is located
+    ports:
+      - 8083:8083/tcp # Webui
+
+  bazarr:
+    image: linuxserver/bazarr:version-v0.9.3
+    container_name: bazarr
+    restart: unless-stopped
+    environment:
+      - UMASK_SET # Control permissions of files and directories created by Bazarr
+      - TZ # Specify a timezone to use EG Europe/London.
+      - PUID # ID of user to take ownership of application/files
+      - PGID # GID of user to take ownership of application/files
+    volumes:
+      - /filestore/tv:/tv # Location of your TV Shows
+      - /filestore/movies:/movies # Location of your movies
+      - /filestore/config/bazarr:/config # Bazarr data
+      - /media/backupshare:/nas
+    ports:
+      - 6767:6767/tcp # Allows HTTP access to the internal webserver.
+      
+  wireguard:
+    image: linuxserver/wireguard
+    container_name: wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+      - SERVERURL=vpn.obexus.co.uk #optional
+      - SERVERPORT=51820 #optional
+      - PEERS=site-to-site,james-mac, james-phone #optional
+      - PEERDNS=192.168.0.100 #optional
+      - INTERNAL_SUBNET=10.13.13.0 #optional
+      - ALLOWEDIPS=0.0.0.0/0 #optional
+    volumes:
+      - /filestore/config/wireguard:/config
+      - /lib/modules:/lib/modules
+    ports:
+      - 51820:51820/udp
+    restart: unless-stopped
+      
+
+  jackett:
+    image: linuxserver/jackett
+    container_name: jackett
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+      - AUTO_UPDATE=true #optional
+    volumes:
+      - /filestore/config/jackett:/config
+      - /filestore/jackett:/downloads
+    ports:
+      - 9117:9117
+    restart: unless-stopped
+
+  homeassistant:
+    image: linuxserver/homeassistant
+    container_name: homeassistant
+    network_mode: host
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+    volumes:
+      - /filestore/config/homeasssistant:/config
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
+    ports:
+      - 8123:8123/tcp # Allows HTTP access to the internal webserver.     
+    
+
+
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp"
+      - "8081:80/tcp"
+      - "4433:443/tcp"
+    environment:
+      TZ: "Europe/London"
+    # WEBPASSWORD: 'set a secure password here or it will be random'
+    # Volumes store your data between container upgrades
+    volumes:
+      - "/filestore/pihole/etc-pihole/:/etc/pihole/"
+      - "/filestore/pihole/etc-dnsmasq.d/:/etc/dnsmasq.d/"
+    # Recommended but not required (DHCP needs NET_ADMIN)
+    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+    cap_add:
+      - NET_ADMIN
+    restart: unless-stopped
+
+  plex:
+    image: linuxserver/plex
+    container_name: plex
+    network_mode: host
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - VERSION=docker
+      - PLEX_CLAIM=claim-gpxFfm61yD3RVZVpnY54
+    volumes:
+      - /filestore/config/plex:/config
+      - /filestore/tv:/tv
+      - /filestore/movies:/movies
+      - /media/backupshare:/nas
+    ports:
+      - 32400:32400/udp
+    restart: unless-stopped
+
+    synclounge:
+      image: linuxserver/synclounge
+      container_name: synclounge
+      environment:
+        - TZ=Europe/London
+        #- AUTH_LIST=plexuser1,plexuser2,email1,machineid1 #optional
+        #- AUTOJOIN_ENABLED=false #optional
+        #- AUTOJOIN_ROOM=roomname #optional
+      ports:
+        - 8088:8088
+      restart: unless-stopped
+
+  qbittorrent:
+    image: linuxserver/qbittorrent:version-14.3.4.99202104031018-7348-2b6baa609ubuntu20.04.1
+    container_name: qbittorrent
+    environment:
+      - UMASK_SET=022 # control permissions of files and directories created by Radarr
+      - TZ=Europe/London # Specify a timezone to use EG Europe/London, this is required for Radarr
+      - PUID=1000 # for UserID
+      - PGID=1000 # for GroupID
+    volumes:
+      - /filestore/tv:/tv # Location of your TV Shows
+      - /filestore/movies:/movies # Location of Movie library on disk (See note in Application setup)
+      - /filestore/downloads:/downloads # Location of download managers output directory (See note in Application setup)
+    ports:
+      - 6881:6881
+      - 6881:6881/udp
+      - 8080:8080
+    restart: always
+
+  radarr:
+    image: linuxserver/radarr:version-3.0.2.4552
+    container_name: radarr
+    restart: unless-stopped
+    environment:
+      - UMASK_SET=022 # control permissions of files and directories created by Radarr
+      - TZ=Europe/London # Specify a timezone to use EG Europe/London, this is required for Radarr
+      - PUID=1000 # for UserID
+      - PGID=1000 # for GroupID
+    volumes:
+      - /filestore/tv:/tv # Location of your TV Shows
+      - /filestore/movies:/movies # Location of Movie library on disk (See note in Application setup)
+      - /filestore/downloads:/downloads # Location of download managers output directory (See note in Application setup)
+      - /filestore/config/radarr:/config # Database and Radarr configs
+      - /media/backupshare:/nas
+    ports:
+      - 7878:7878/tcp # The port for the Radarr webinterface
+
+  sonarr:
+    image: linuxserver/sonarr:version-3.0.6.1196
+    environment:
+      - UMASK_SET=022 # control permissions of files and directories created by Radarr
+      - TZ=Europe/London # Specify a timezone to use EG Europe/London, this is required for Radarr
+      - PUID=1000 # for UserID
+      - PGID=1000 # for GroupID
+    volumes:
+      - /filestore/movies:/movies # Location of Movie library on disk (See note in Application setup)
+      - /filestore/tv:/tv # Location of your TV Shows
+      - /filestore/downloads:/downloads # Location of download managers output directory (See note in Application setup)
+      - /filestore/config/sonarr:/config # Database and Radarr configs
+      - /media/backupshare:/nas
+    container_name: sonarr
+    ports:
+      - 8989:8989/tcp
+    restart: always
